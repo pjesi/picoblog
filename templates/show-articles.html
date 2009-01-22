@@ -8,7 +8,7 @@
 
 {% block recent_list %}
   {% if recent %}
-    <b>Recent:</b>
+    <h5>Recent</h5>
     <ul>
     {% for article in recent %}
       <li><a href="{{ article.path }}">{{ article.title }}</a>
@@ -19,7 +19,7 @@
 
 {% block date_list %}
   {% if date_list %}
-    <b>By month:</b>
+    <h5>By month</h5>
     <ul>
     {% for date_count in date_list %}
       <li><a href="{{ date_path }}/{{ date_count.date|date:"Y-m" }}/">{{ date_count.date|date:"F, Y" }}</a> ({{ date_count.count }})
@@ -30,12 +30,16 @@
 
 {% block tag_list %}
   {% if tag_list %}
-    <div id="tag-cloud">
+    <h5>Tags</h5>
+    <ul class="tags">
     {% for tag_count in tag_list %}
+      <li>
       <a class="{{ tag_count.css_class }}" 
-         href="{{ tag_path }}/{{ tag_count.tag }}/">{{ tag_count.tag }}({{ tag_count.count }})</a>{% if not forloop.last %},{% endif %}
-    {% endfor %}
-    </div>
+         title="{{ tag_count.count }}"
+         href="{{ tag_path }}/{{ tag_count.tag }}/">{{ tag_count.tag }}</a>
+      </li> 
+   {% endfor %}
+    </p>
   {% endif %}
 {% endblock %}
 

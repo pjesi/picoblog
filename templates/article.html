@@ -1,20 +1,29 @@
 
-  <table class="article" width="100%" border="0" cellspacing="0" cellpadding="0">
-    <tr class="article_title_line">
-      <td class="article_title">{{ article.title }}</td>
-      <td class="timestamp">{{ article.published_when|date:"j F, Y \a\t g:i A" }}</td>
-    </tr>
-    <tr>
-      {% if article.draft %}
-      <td colspan="2" class="article-body-draft">
-      {% else %}
-      <td colspan="2" class="article-body">
-      {% endif %}
-      {{ article.html }}
-      </td>
-    </tr>
-    <tr>
-      <td colspan="2" class="article-footer">
-        <a href="{{ article.path }}" class="reference">Permalink</a> | Tags: {{ article.tags|join:", " }}</td>
-    </tr>
-  </table>
+  <div class="article">
+    <h2>
+      {{ article.title }}      
+    </h2>
+    <p title="{{ article.published_when }}" 
+       class="timestamp">{{ article.published_when|date:"j F, Y \a\t g:i A" }}</p>
+    
+  {% if article.draft %}
+    <p class="article-body draft">
+  {% else %}
+    <p class="article-body">
+  {% endif %}
+  {{ article.html }}
+      
+    </p>
+    
+	<h4>Tags</h4>
+	<ul class="tags">
+	  {% for tag in article.tags %}
+	    <li><a href="{{ tag_path }}/{{ tag }}/">{{ tag }}</a></li>
+	  {% endfor %}
+	</ul>
+
+{% block article_tags %}{% endblock %}
+<p  class="article-footer">
+    <a href="{{ article.path }}" class="reference">Permalink</a> 
+    
+</p>
