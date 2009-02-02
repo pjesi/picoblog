@@ -17,11 +17,19 @@ import sys
 import math
 import random
 import datetime
+import cgi
 
 # Google AppEngine imports
 from google.appengine.api import users
 from google.appengine.ext import webapp
+from google.appengine.ext import db
+
 from google.appengine.ext.webapp import util
+
+from google.appengine.ext.webapp import template
+
+from google.appengine.ext.db import djangoforms
+from django.newforms import forms
 
 from models import *
 from rst import rst2html
@@ -32,6 +40,27 @@ import request
 # Classes
 # -----------------------------------------------------------------------------
 
+
+class CommentForm(djangoforms.ModelForm):
+	class Meta:
+		model = Comment
+		fields = ['body', 'author', 'email', 'url']
+		
+	def clean_empty(self, field, msg):
+		data = self.clean_data.get(field)
+		if data == '':
+			raise forms.ValidationError(msg)
+		return data		
+		
+	def clean_body(self):
+		return self.clean_empty('body', 'Comment must not be empty')
+			
+	def clean_email(self):
+		return self.clean_empty('email', 'Email must not be empty')
+	
+	def clean_author(self):
+		return self.clean_empty('author', 'Author must not be empty')
+
 class DateCount(object):
     """
     Convenience class for storing and sorting year/month counts.
@@ -39,16 +68,16 @@ class DateCount(object):
     def __init__(self, date, count):
         self.date = date
         self.count = count
-
+    
     def __cmp__(self, other):
         return cmp(self.date, other.date)
-
+    
     def __hash__(self):
         return self.date.__hash__()
-
+    
     def __str__(self):
         return '%s(%d)' % (self.date, self.count)
-
+    
     def __repr__(self):
         return '<%s: %s>' % (self.__class__.__name__, str(self))
 
@@ -66,7 +95,7 @@ class AbstractPageHandler(request.BlogRequestHandler):
     Abstract base class for all handlers in this module. Basically,
     this class exists to consolidate common logic.
     """
-
+    
     def get_tag_counts(self):
         """
         Get tag counts and calculate tag cloud frequencies.
@@ -78,16 +107,16 @@ class AbstractPageHandler(request.BlogRequestHandler):
         result = []
         if tag_counts:
             maximum = max(tag_counts.values())
-
+            
             for tag, count in tag_counts.items():
                 tc = TagCount(tag, count)
-
+                
                 # Determine the popularity of this term as a percentage.
-
+                
                 percent = math.floor((tc.count * 100) / maximum)
-
+                
                 # determine the CSS class for this term based on the percentage
-
+                
                 if percent <= 20:
                     tc.css_class = 'tag-cloud-tiny'
                 elif 20 < percent <= 40:
@@ -98,12 +127,12 @@ class AbstractPageHandler(request.BlogRequestHandler):
                     tc.css_class = 'tag-cloud-large'
                 else:
                     tc.css_class = 'tag-cloud-huge'
-                    
+                
                 result.append(tc)
-
+        
         random.shuffle(result)
         return result
-
+    
     def get_month_counts(self):
         """
         Get date counts, sorted in reverse chronological order.
@@ -120,12 +149,12 @@ class AbstractPageHandler(request.BlogRequestHandler):
                 date_count[just_date] += hash[dt]
             except KeyError:
                 date_count[just_date] = hash[dt]
-
+        
         dates = date_count.keys()
         dates.sort()
         dates.reverse()
         return [DateCount(date, date_count[date]) for date in dates]
-
+    
     def augment_articles(self, articles, url_prefix, html=True):
         """
         Augment the ``Article`` objects in a list with the expanded
@@ -139,10 +168,10 @@ class AbstractPageHandler(request.BlogRequestHandler):
         :Parameters:
             articles : list
                 list of ``Article`` objects to be augmented
-
+            
             url_prefix : str
                 URL prefix to use when constructing full URL from path
-                
+            
             html : bool
                 ``True`` to generate HTML from each article's RST
         """
@@ -154,11 +183,12 @@ class AbstractPageHandler(request.BlogRequestHandler):
                     article.html = ''
             article.path = '/' + defs.ARTICLE_URL_PATH + '/%s' % article.id
             article.url = url_prefix + article.path
-
+    
     def render_articles(self,
                         articles,
                         request,
                         recent,
+                        comment=CommentForm(),
                         template_name='show-articles.html'):
         """
         Render a list of articles.
@@ -166,16 +196,16 @@ class AbstractPageHandler(request.BlogRequestHandler):
         :Parameters:
             articles : list
                 list of ``Article`` objects to render
-
+            
             request : HttpRequest
                 the GAE HTTP request object
-                
+            
             recent : list
                 list of recent ``Article`` objects. May be empty.
-                
+            
             template_name : str
                 name of template to use
-                
+        
         :rtype: str
         :return: the rendered articles
         """
@@ -183,14 +213,14 @@ class AbstractPageHandler(request.BlogRequestHandler):
         port = request.environ['SERVER_PORT']
         if port:
             url_prefix += ':%s' % port
-
+        
         self.augment_articles(articles, url_prefix)
         self.augment_articles(recent, url_prefix, html=False)
-
+        
         last_updated = datetime.datetime.now()
         if articles:
             last_updated = articles[0].published_when
-
+        
         blog_url = url_prefix
         tag_path = '/' + defs.TAG_URL_PATH
         tag_url = url_prefix + tag_path
@@ -198,7 +228,7 @@ class AbstractPageHandler(request.BlogRequestHandler):
         date_url = url_prefix + date_path
         media_path = '/' + defs.MEDIA_URL_PATH
         media_url = url_prefix + media_path
-
+        
         template_variables = {'blog_name'    : defs.BLOG_NAME,
                               'blog_owner'   : defs.BLOG_OWNER,
                               'articles'     : articles,
@@ -214,25 +244,26 @@ class AbstractPageHandler(request.BlogRequestHandler):
                               'date_path'    : date_path,
                               'date_url'     : date_url,
                               'rss2_path'    : '/' + defs.RSS2_URL_PATH,
+							  'comment_form' : comment,
                               'recent'       : recent}
-
+        
         return self.render_template(template_name, template_variables)
-
+    
     def get_recent(self):
         """
         Get up to ``defs.TOTAL_RECENT`` recent articles.
-
+        
         :rtype: list
         :return: list of recent ``Article`` objects
         """
         articles = Article.published()
-
+        
         total_recent = min(len(articles), defs.TOTAL_RECENT)
         if articles:
             recent = articles[0:total_recent]
         else:
             recent = []
-
+        
         return recent
 
 class FrontPageHandler(AbstractPageHandler):
@@ -243,7 +274,7 @@ class FrontPageHandler(AbstractPageHandler):
         articles = Article.published()
         if len(articles) > defs.MAX_ARTICLES_PER_PAGE:
             articles = articles[:defs.MAX_ARTICLES_PER_PAGE]
-
+        
         self.response.out.write(self.render_articles(articles,
                                                      self.request,
                                                      self.get_recent()))
@@ -284,7 +315,7 @@ class SingleArticleHandler(AbstractPageHandler):
         else:
             template = 'not-found.html'
             articles = []
-
+        
         self.response.out.write(self.render_articles(articles=articles,
                                                      request=self.request,
                                                      recent=self.get_recent(),
@@ -299,7 +330,7 @@ class ArchivePageHandler(AbstractPageHandler):
         self.response.out.write(self.render_articles(articles,
                                                      self.request,
                                                      [],
-                                                     'archive.html'))
+                                                     template_name='archive.html'))
 
 class RSSFeedHandler(AbstractPageHandler):
     """
@@ -311,7 +342,7 @@ class RSSFeedHandler(AbstractPageHandler):
         self.response.out.write(self.render_articles(articles,
                                                      self.request,
                                                      [],
-                                                     'rss2.xml'))
+                                                     template_name='rss2.xml'))
 
 class NotFoundPageHandler(AbstractPageHandler):
     """
@@ -321,7 +352,44 @@ class NotFoundPageHandler(AbstractPageHandler):
         self.response.out.write(self.render_articles([],
                                                      self.request,
                                                      [],
-                                                     'not-found.html'))
+                                                     template_name='not-found.html'))
+
+		
+
+class PostCommentFormHandler(AbstractPageHandler):
+	def get(self, id):
+		article = Article.get(int(id))
+		if article:
+			template = 'show-articles.html'
+			articles = [article]
+			more = None
+		else:
+			template = 'not-found.html'
+			articles = []
+		
+		self.response.out.write(self.render_articles(articles=articles,
+                                                     request=self.request,
+                                                     recent=self.get_recent(),
+                                                     template_name=template))
+	
+	def post(self, id):
+		article = Article.get(int(id))
+		
+		data = CommentForm(data=self.request.POST)
+		if data.is_valid():
+			if article:
+				comment = data.save(commit=False)
+				comment.article = article
+				comment.put()
+				self.redirect('/')
+				self.redirect('/id/' + id)
+		else:
+			self.response.out.write(self.render_articles(articles=[article],
+	                                                     request=self.request,
+	                                                     recent=self.get_recent(),
+	                                                     comment=data,
+	                                                     template_name='show-articles.html'))
+
 
 # -----------------------------------------------------------------------------
 # Main program
@@ -334,9 +402,10 @@ application = webapp.WSGIApplication(
      ('/id/(\d+)/?$', SingleArticleHandler),
      ('/archive/?$', ArchivePageHandler),
      ('/rss2/?$', RSSFeedHandler),
+     ('/id/(\d+)/comments/post/?', PostCommentFormHandler),
      ('/.*$', NotFoundPageHandler),
      ],
-
+    
     debug=True)
 
 def main():

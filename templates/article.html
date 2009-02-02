@@ -27,3 +27,61 @@
     <a href="{{ article.path }}" class="reference">Permalink</a> 
     
 </p>
+
+<h3>Comments</h3>
+
+
+
+
+<form method="post" action="/id/{{ article.id }}/comments/post">
+
+<div>
+	<label for="id_author">Your name</label>
+	{{ comment_form.author }}
+	{{ comment_form.author.errors }}
+</div>
+
+<div>
+	<label for="id_email">Your email</label>
+	{{ comment_form.email }}
+	{{ comment_form.email.errors }}
+</div>
+
+<div>
+	<label for="id_url">Your homepage</label>
+	{{ comment_form.url }}
+	{{ comment_form.url.errors }}
+</div>
+
+<div>
+	<label for="id_body">Your comment</label>
+	{{ comment_form.body }}
+	{{ comment_form.body.errors }}
+</div>
+
+	<input type="submit" name="save" value="Post comment" />
+
+</form>
+
+
+<div class="comment">
+{% for comment in article.comments %}
+	<h4>
+	{% if comment.url %}<a href="{{ comment.url }}">{% endif %}
+		 <span class="author">{{ comment.author }}</span>
+	{% if comment.url %}</a>{% endif %}
+	wrote on 
+	<span class="timestamp" title="{{ comment.timestamp }}">
+		{{ comment.timestamp|date:"j F, Y \a\t g:i A" }}
+	</span>
+		
+		
+	</h4>
+	<p>{{ comment.body }} </p>
+	
+</div>	
+{% endfor %} 
+
+
+
+

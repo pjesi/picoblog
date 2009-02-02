@@ -5,6 +5,8 @@ from google.appengine.ext import db
 
 FETCH_THEM_ALL = sys.maxint - 1
 
+
+
 class Article(db.Model):
 
     title = db.StringProperty(required=True)
@@ -136,3 +138,14 @@ class Article(db.Model):
         if resave:
             self.id = self.key().id()
             self.put()
+			
+			
+class Comment(db.Model):
+	author = db.StringProperty()
+	url = db.LinkProperty()
+	email = db.EmailProperty()
+	body = db.TextProperty()
+	timestamp = db.DateTimeProperty(auto_now_add=True)
+	id = db.IntegerProperty()
+	article = db.ReferenceProperty(Article, collection_name='comments')
+	
